@@ -1,4 +1,5 @@
 import os
+import time
 import yt_dlp
 import asyncio
 import pyrogram  #upm package(pyrogram-repl)
@@ -28,7 +29,8 @@ app = Client(
 
 user_urls = {}
 user_states = {}
-
+user_cooldowns = {}
+bypass_users = [12345678, 87654321]
 
 def cleanup_temp_files():
   for filename in os.listdir(temp_directory):
@@ -45,6 +47,7 @@ cleanup_temp_files()
 
 def download_media(choice, url, user_id):
   try:
+    progress_message = app.send_message(user_id, "Download pending...")
     if choice == "video":
       ytdl_opts = {
           "format": "best[ext=mp4]",
@@ -76,9 +79,11 @@ def download_media(choice, url, user_id):
 
     ytdl = yt_dlp.YoutubeDL(ytdl_opts)
     video_info = ytdl.extract_info(url, download=False)
+    progress_message.edit_text("Downloading locally...")
     ytdl.download([url])
     temp_file_path = ytdl.prepare_filename(video_info)
     if choice == "video":
+      progress_message.edit_text("Generating thumbnail...")
       raw_thumbnail = None
       thumbnail = None
       if os.path.isfile(temp_file_path.rsplit(".", 1)[0] + ".webp"):
@@ -95,7 +100,7 @@ def download_media(choice, url, user_id):
         video = VideoFileClip(temp_file_path)
         video.save_frame(outpath, t=0)
         thumbnail = outpath
-
+        progress_message.edit_text("Setting upload parameters...")
       if temp_file_path is not None:
         params = {}
         duration = video_info.get("duration")
@@ -110,18 +115,21 @@ def download_media(choice, url, user_id):
 
         with open(temp_file_path,
                   "rb") as video_file, open(thumbnail, "rb") as thumb_file:
+          progress_message.edit_text("Uploading to telegram...")
           app.send_video(
               user_id,
               video=video_file,
               thumb=thumb_file,
               **params,
           )
-
+          progress_message.delete()
+        user_cooldowns[user_id] = time.time()
         os.remove(temp_file_path)
         if raw_thumbnail:
           os.remove(raw_thumbnail)
         os.remove(thumbnail)
     elif choice == "audio":
+      progress_message.edit_text("Setting upload parameters...")
       if temp_file_path is not None:
         params = {}
         duration = video_info.get("duration")
@@ -135,12 +143,14 @@ def download_media(choice, url, user_id):
           params["performer"] = performer
 
       with open(temp_file_path.rsplit(".", 1)[0] + ".mp3", "rb") as audio_file:
+        progress_message.edit_text("Uploading to telegram...")
         app.send_audio(
             user_id,
             audio=audio_file,
             **params,
         )
-
+      progress_message.delete()
+      user_cooldowns[user_id] = time.time()
       os.remove(temp_file_path.rsplit(".", 1)[0] + ".mp3")
 
   except Exception as e:
@@ -181,6 +191,18 @@ async def store_url_handler(bot, update):
   url = update.text
   user_urls[user_id] = url
   message = update
+  if user_id in bypass_users:
+    pass
+  elif user_id in user_cooldowns:
+    current_time = time.time()
+    if current_time - user_cooldowns[user_id] < 60:
+      wait = int(60 - (current_time - user_cooldowns[user_id]))
+      if wait >= 55:
+        await message.reply_text("Flooding is not allowed!", quote=True)
+      else:
+        await message.reply_text(f"Please wait {wait} second(s) before making another request.", quote=True)
+      return
+  user_cooldowns[user_id] = time.time()
   valid_message = await message.reply_text(
       "Validating URL and extracting formats...", quote=True)
 
@@ -213,6 +235,7 @@ async def store_url_handler(bot, update):
           valid_message.delete()
     except:
       valid_message.edit_text("No valid formats found for the provided URL.")
+      del user_cooldowns[user_id]
 
   try:
     checkurl_thread = threading.Thread(target=validate_url,
@@ -220,6 +243,7 @@ async def store_url_handler(bot, update):
     checkurl_thread.start()
   except Exception as e:
     valid_message.edit_text("Error occured, please try again later.")
+    del user_cooldowns[user_id]
     print(e)
 
 
