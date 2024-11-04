@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10.0,<3.11"
+python = ">=3.10.0,<3.12"
 tgcrypto = "^1.2.5"
 aiohttp = "^3.8.5"
 yt-dlp = "^2023.7.6"
