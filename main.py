@@ -293,7 +293,7 @@ def home():
     return "Bot is Online!"
 
 def run_flask():
-    flask_app.run(port=8080)
+    flask_app.run(port=10000)
 
 if __name__ == "__main__":
   print("Bot is online.")
