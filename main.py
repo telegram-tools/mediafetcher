@@ -12,6 +12,7 @@ from pyrogram import enums  #upm package(pyrogram-repl)
 from pyrogram import Client, filters  #upm package(pyrogram-repl)
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton  #upm package(pyrogram-repl)
+from tqdm import tqdm
 
 api_id = os.environ["API_ID"]
 api_hash = os.environ["API_HASH"]
@@ -56,6 +57,7 @@ def download_media(choice, url, user_id):
           "embedthumbnail": True,
           "writethumbnail": True,
           "quiet": True,
+          "progress_hooks": [lambda d: progress_message.edit_text(f"Downloading locally... {d['status']}: {d['_percent_str']}")]
       }
     elif choice == "audio":
       ytdl_opts = {
@@ -75,12 +77,12 @@ def download_media(choice, url, user_id):
           True,
           "quiet":
           True,
+          "progress_hooks": [lambda d: progress_message.edit_text(f"Downloading locally... {d['status']}: {d['_percent_str']}")]
       }
 
-    ytdl = yt_dlp.YoutubeDL(ytdl_opts)
-    video_info = ytdl.extract_info(url, download=False)
-    progress_message.edit_text("Downloading locally...")
-    ytdl.download([url])
+    with yt_dlp.YoutubeDL(ytdl_opts) as ytdl:
+      video_info = ytdl.extract_info(url, download=False)
+      ytdl.download([url])
     temp_file_path = ytdl.prepare_filename(video_info)
     if choice == "video":
       progress_message.edit_text("Generating thumbnail...")
@@ -113,13 +115,12 @@ def download_media(choice, url, user_id):
         if height is not None:
           params["height"] = int(height)
 
-        with open(temp_file_path,
-                  "rb") as video_file, open(thumbnail, "rb") as thumb_file:
+        with open(temp_file_path, "rb") as video_file, open(thumbnail, "rb") as thumb_file:
           progress_message.edit_text("Uploading to telegram...")
           app.send_video(
               user_id,
-              video=video_file,
-              thumb=thumb_file,
+              video=tqdm(video_file, desc="Uploading video", unit="B", unit_scale=True, unit_divisor=1024),
+              thumb=tqdm(thumb_file, desc="Uploading thumbnail", unit="B", unit_scale=True, unit_divisor=1024),
               **params,
           )
           progress_message.delete()
@@ -146,7 +147,7 @@ def download_media(choice, url, user_id):
         progress_message.edit_text("Uploading to telegram...")
         app.send_audio(
             user_id,
-            audio=audio_file,
+            audio=tqdm(audio_file, desc="Uploading audio", unit="B", unit_scale=True, unit_divisor=1024),
             **params,
         )
       progress_message.delete()
