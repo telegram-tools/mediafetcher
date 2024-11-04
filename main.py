@@ -8,6 +8,7 @@ import traceback
 import threading
 import subprocess
 from PIL import Image
+from flask import Flask
 from pyrogram import enums  #upm package(pyrogram-repl)
 from pyrogram import Client, filters  #upm package(pyrogram-repl)
 from moviepy.video.io.VideoFileClip import VideoFileClip
@@ -45,6 +46,7 @@ def cleanup_temp_files():
 
 cleanup_temp_files()
 
+flask_app = Flask(__name__)
 
 def download_media(choice, url, user_id):
   try:
@@ -286,7 +288,14 @@ async def start_command(client, message):
   welcome_message = "Download and share medias more conviniently just by sending the URL of the content you want."
   await message.reply_text(welcome_message, quote=True)
 
+@flask_app.route("/")
+def home():
+    return "Bot is Online!"
+
+def run_flask():
+    flask_app.run(port=8080)
 
 if __name__ == "__main__":
   print("Bot is online.")
+  threading.Thread(target=run_flask).start()
   app.run()
